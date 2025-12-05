@@ -482,26 +482,43 @@ def parse_venues(content):
         try:
             venue = {}
             
-            if m := re.search(r'VENUE:\s*(.+?)(?:\n|$)', block):
+            m = re.search(r'VENUE:\s*(.+?)(?:\n|$)', block)
+            if m:
                 venue['name'] = m.group(1).strip()
-            if m := re.search(r'CITY:\s*(.+?)(?:\n|$)', block):
+            
+            m = re.search(r'CITY:\s*(.+?)(?:\n|$)', block)
+            if m:
                 venue['city'] = m.group(1).strip()
-            if m := re.search(r'STATE:\s*(.+?)(?:\n|$)', block):
+            
+            m = re.search(r'STATE:\s*(.+?)(?:\n|$)', block)
+            if m:
                 venue['state'] = m.group(1).strip()
-            if m := re.search(r'CAPACITY:\s*(.+?)(?:\n|$)', block):
+            
+            m = re.search(r'CAPACITY:\s*(.+?)(?:\n|$)', block)
+            if m:
                 cap = m.group(1).strip()
-                if cap.lower() != 'unknown' and (cm := re.search(r'\d+', cap)):
-                    venue['capacity'] = int(cm.group())
-            if m := re.search(r'TYPE:\s*(.+?)(?:\n|$)', block):
+                if cap.lower() != 'unknown':
+                    cm = re.search(r'\d+', cap)
+                    if cm:
+                        venue['capacity'] = int(cm.group())
+            
+            m = re.search(r'TYPE:\s*(.+?)(?:\n|$)', block)
+            if m:
                 venue['type'] = m.group(1).strip()
-            if m := re.search(r'WEBSITE:\s*(.+?)(?:\n|$)', block):
+            
+            m = re.search(r'WEBSITE:\s*(.+?)(?:\n|$)', block)
+            if m:
                 website = m.group(1).strip()
                 venue['website'] = None if website.lower() == 'unknown' else website
-            if m := re.search(r'MATCH_SCORE:\s*(\d+)', block):
+            
+            m = re.search(r'MATCH_SCORE:\s*(\d+)', block)
+            if m:
                 venue['match_score'] = int(m.group(1))
             else:
                 venue['match_score'] = 70
-            if m := re.search(r'REASON:\s*(.+?)(?:\n|---|$)', block, re.DOTALL):
+            
+            m = re.search(r'REASON:\s*(.+?)(?:\n|---|$)', block, re.DOTALL)
+            if m:
                 venue['reason'] = m.group(1).strip()
             
             if 'name' in venue and 'city' in venue:
