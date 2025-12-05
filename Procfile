@@ -1,1 +1,1 @@
-web: gunicorn main:app --timeout 180 --worker-class gevent --worker-connections 1000
+web: waitress-serve --listen=0.0.0.0:8080 --channel-timeout=600 main:app
