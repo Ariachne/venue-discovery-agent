@@ -320,23 +320,53 @@ HTML_TEMPLATE = """
         async function discoverVenues() {
             const profile = saveProfile();
             const targetCity = document.getElementById('targetCity').value;
-            
+    
             if (!profile.name || !profile.genre || !targetCity) {
                 showMessage('Please fill in at least Artist Name, Genre, and Target City', 'error');
                 return;
             }
-            
+    
             document.getElementById('discoverBtn').disabled = true;
             document.getElementById('loadingDiscover').classList.remove('hidden');
             document.getElementById('venuesSection').classList.add('hidden');
             document.getElementById('researchSection').classList.add('hidden');
-            
+    
+            // Create AbortController with 3 minute timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+    
             try {
                 const response = await fetch('/discover', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({profile, targetCity})
+                    body: JSON.stringify({profile, targetCity}),
+                    signal: controller.signal
                 });
+        
+                clearTimeout(timeoutId);
+        
+                const data = await response.json();
+        
+                if (data.error) {
+                    showMessage('Error: ' + data.error, 'error');
+                } else {
+                    currentVenues = data.venues;
+                    displayVenues(data.venues);
+                    showMessage(`Found ${data.venues.length} venues!`, 'success');
+                }
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    showMessage('Request timed out after 3 minutes. Please try again.', 'error');
+                } else {
+                    showMessage('Failed to discover venues. Please try again.', 'error');
+                }
+                console.error('Discover error:', error);
+            } finally {
+                document.getElementById('discoverBtn').disabled = false;
+                document.getElementById('loadingDiscover').classList.add('hidden');
+            }
+    }
                 
                 const data = await response.json();
                 
@@ -380,13 +410,19 @@ HTML_TEMPLATE = """
             
             document.getElementById('loadingResearch').classList.remove('hidden');
             document.getElementById('researchSection').classList.add('hidden');
-            
+
+            // Create AbortController with 3 minute timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+    
             try {
                 const response = await fetch('/research', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({venue, profile})
                 });
+
+                clearTimeout(timeoutId);
                 
                 const data = await response.json();
                 
@@ -400,11 +436,17 @@ HTML_TEMPLATE = """
                     document.getElementById('researchSection').scrollIntoView({behavior: 'smooth'});
                 }
             } catch (error) {
-                showMessage('Failed to research venue. Please try again.', 'error');
-            } finally {
-                document.getElementById('loadingResearch').classList.add('hidden');
-            }
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    showMessage('Request timed out after 3 minutes. Please try again.', 'error');
+                } else {
+                    showMessage('Failed to research venue. Please try again.', 'error');
+                }
+                console.error('Research error:', error);
+        } finally {
+            document.getElementById('loadingResearch').classList.add('hidden');
         }
+    }
         
         function downloadResearch() {
             const element = document.createElement('a');
