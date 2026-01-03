@@ -318,55 +318,66 @@ HTML_TEMPLATE = """
         }
         
         async function discoverVenues() {
-            const profile = saveProfile();
-            const targetCity = document.getElementById('targetCity').value;
-    
-            if (!profile.name || !profile.genre || !targetCity) {
-                showMessage('Please fill in at least Artist Name, Genre, and Target City', 'error');
-                return;
-            }
-    
-            document.getElementById('discoverBtn').disabled = true;
-            document.getElementById('loadingDiscover').classList.remove('hidden');
-            document.getElementById('venuesSection').classList.add('hidden');
-            document.getElementById('researchSection').classList.add('hidden');
-    
-            // Create AbortController with 3 minute timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
-    
-            try {
-                const response = await fetch('/discover', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({profile, targetCity}),
-                    signal: controller.signal
-                });
-        
-                clearTimeout(timeoutId);
-        
-                const data = await response.json();
-        
-                if (data.error) {
-                    showMessage('Error: ' + data.error, 'error');
-                } else {
-                    currentVenues = data.venues;
-                    displayVenues(data.venues);
-                    showMessage(`Found ${data.venues.length} venues!`, 'success');
-                }
-            } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name === 'AbortError') {
-                    showMessage('Request timed out after 3 minutes. Please try again.', 'error');
-                } else {
-                    showMessage('Failed to discover venues. Please try again.', 'error');
-                }
-                console.error('Discover error:', error);
-            } finally {
-                document.getElementById('discoverBtn').disabled = false;
-                document.getElementById('loadingDiscover').classList.add('hidden');
-            }
+    const profile = saveProfile();
+    const targetCity = document.getElementById('targetCity').value;
+
+    if (!profile.name || !profile.genre || !targetCity) {
+        showMessage('Please fill in at least Artist Name, Genre, and Target City', 'error');
+        return;
     }
+
+    document.getElementById('discoverBtn').disabled = true;
+    document.getElementById('loadingDiscover').classList.remove('hidden');
+    document.getElementById('venuesSection').classList.add('hidden');
+    document.getElementById('researchSection').classList.add('hidden');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+    try {
+        const response = await fetch('/discover', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({profile, targetCity}),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        const data = await response.json();
+
+        if (data.error) {
+            // Check if it's a rate limit error
+            if (data.error.includes('RATE_LIMIT')) {
+                showMessage('⏱️ Rate limit reached. Waiting 60 seconds and retrying...', 'error');
+                
+                // Wait 60 seconds and retry
+                await new Promise(resolve => setTimeout(resolve, 60000));
+                
+                // Retry the request
+                showMessage('Retrying...', 'success');
+                await discoverVenues();
+                return;
+            } else {
+                showMessage('Error: ' + data.error, 'error');
+            }
+        } else {
+            currentVenues = data.venues;
+            displayVenues(data.venues);
+            showMessage(`Found ${data.venues.length} venues!`, 'success');
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            showMessage('Request timed out after 3 minutes. Please try again.', 'error');
+        } else {
+            showMessage('Failed to discover venues. Please try again.', 'error');
+        }
+        console.error('Discover error:', error);
+    } finally {
+        document.getElementById('discoverBtn').disabled = false;
+        document.getElementById('loadingDiscover').classList.add('hidden');
+    }
+}
         
         function displayVenues(venues) {
             const container = document.getElementById('venuesList');
@@ -386,50 +397,62 @@ HTML_TEMPLATE = """
         }
         
         async function researchVenue(index) {
-            const venue = currentVenues[index];
-            const profile = saveProfile();
-            
-            currentVenueName = venue.name;
-            
-            document.getElementById('loadingResearch').classList.remove('hidden');
-            document.getElementById('researchSection').classList.add('hidden');
-
-            // Create AbortController with 3 minute timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+    const venue = currentVenues[index];
+    const profile = saveProfile();
     
-            try {
-                const response = await fetch('/research', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({venue, profile})
-                });
+    currentVenueName = venue.name;
+    
+    document.getElementById('loadingResearch').classList.remove('hidden');
+    document.getElementById('researchSection').classList.add('hidden');
 
-                clearTimeout(timeoutId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+    try {
+        const response = await fetch('/research', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({venue, profile}),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        const data = await response.json();
+        
+        if (data.error) {
+            // Check if it's a rate limit error
+            if (data.error.includes('RATE_LIMIT')) {
+                showMessage('⏱️ Rate limit reached. Waiting 60 seconds and retrying...', 'error');
                 
-                const data = await response.json();
+                // Wait 60 seconds and retry
+                await new Promise(resolve => setTimeout(resolve, 60000));
                 
-                if (data.error) {
-                    showMessage('Error: ' + data.error, 'error');
-                } else {
-                    currentResearch = data.research;
-                    document.getElementById('researchTitle').textContent = `Research: ${venue.name}`;
-                    document.getElementById('researchContent').textContent = data.research;
-                    document.getElementById('researchSection').classList.remove('hidden');
-                    document.getElementById('researchSection').scrollIntoView({behavior: 'smooth'});
-                }
-            } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name === 'AbortError') {
-                    showMessage('Request timed out after 3 minutes. Please try again.', 'error');
-                } else {
-                    showMessage('Failed to research venue. Please try again.', 'error');
-                }
-                console.error('Research error:', error);
-        } finally {
-            document.getElementById('loadingResearch').classList.add('hidden');
+                // Retry the request
+                showMessage('Retrying...', 'success');
+                await researchVenue(index);
+                return;
+            } else {
+                showMessage('Error: ' + data.error, 'error');
+            }
+        } else {
+            currentResearch = data.research;
+            document.getElementById('researchTitle').textContent = `Research: ${venue.name}`;
+            document.getElementById('researchContent').textContent = data.research;
+            document.getElementById('researchSection').classList.remove('hidden');
+            document.getElementById('researchSection').scrollIntoView({behavior: 'smooth'});
         }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            showMessage('Request timed out after 3 minutes. Please try again.', 'error');
+        } else {
+            showMessage('Failed to research venue. Please try again.', 'error');
+        }
+        console.error('Research error:', error);
+    } finally {
+        document.getElementById('loadingResearch').classList.add('hidden');
     }
+}
         
         function downloadResearch() {
             const element = document.createElement('a');
@@ -480,17 +503,24 @@ REASON: [one sentence]
 
 Search thoroughly for venues that book {profile['genre']} music."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=6000,
-        tools=[{
-           "type": "web_search_20250305",
-           "name": "web_search"
-        }],
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    return parse_venues(response.content)
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=3000,
+            tools=[{
+                "type": "web_search_20250305",
+                "name": "web_search"
+            }],
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        return parse_venues(response.content)
+        
+    except anthropic.RateLimitError as e:
+        raise Exception("RATE_LIMIT_ERROR")
+    except Exception as e:
+        print(f"Discover error: {e}")
+        raise
 
 
 def parse_venues(content):
@@ -560,6 +590,8 @@ def parse_venues(content):
 
 def research_venue_api(venue, profile):
     """Research a specific venue"""
+    import anthropic
+    
     client = get_client()
     
     prompt = f"""Deep research on this venue for booking:
@@ -600,22 +632,30 @@ Provide detailed intelligence on:
 
 Be thorough. Use web search extensively."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=4000,
-        tools=[{
-            "type": "web_search_20250305",
-            "name": "web_search"
-        }],
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    research = ""
-    for block in response.content:
-        if hasattr(block, 'text'):
-            research += block.text
-    
-    return research
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=2000,
+            tools=[{
+                "type": "web_search_20250305",
+                "name": "web_search"
+            }],
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        research = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                research += block.text
+        
+        return research
+        
+    except anthropic.RateLimitError as e:
+        # Return special error that frontend can detect
+        raise Exception("RATE_LIMIT_ERROR")
+    except Exception as e:
+        print(f"Research error: {e}")
+        raise
 
 
 @app.route('/')
