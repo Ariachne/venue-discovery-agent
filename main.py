@@ -367,23 +367,6 @@ HTML_TEMPLATE = """
                 document.getElementById('loadingDiscover').classList.add('hidden');
             }
     }
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    showMessage('Error: ' + data.error, 'error');
-                } else {
-                    currentVenues = data.venues;
-                    displayVenues(data.venues);
-                    showMessage(`Found ${data.venues.length} venues!`, 'success');
-                }
-            } catch (error) {
-                showMessage('Failed to discover venues. Please try again.', 'error');
-            } finally {
-                document.getElementById('discoverBtn').disabled = false;
-                document.getElementById('loadingDiscover').classList.add('hidden');
-            }
-        }
         
         function displayVenues(venues) {
             const container = document.getElementById('venuesList');
