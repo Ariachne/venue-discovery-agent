@@ -344,18 +344,30 @@ HTML_TEMPLATE = """
 
         clearTimeout(timeoutId);
         const data = await response.json();
-
+        
         if (data.error) {
-            // Check if it's a rate limit error
-            if (data.error.includes('RATE_LIMIT')) {
+            console.log('Error received:', data.error); // Debug log
+            
+            // Check if it's a rate limit error (check multiple variations)
+            const errorLower = data.error.toLowerCase();
+            if (errorLower.includes('rate') || errorLower.includes('limit')) {
                 showMessage('⏱️ Rate limit reached. Waiting 60 seconds and retrying...', 'error');
                 
-                // Wait 60 seconds and retry
+                // Show countdown
+                let countdown = 60;
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    showMessage(`⏱️ Rate limit reached. Retrying in ${countdown} seconds...`, 'error');
+                }, 1000);
+                
+                // Wait 60 seconds
                 await new Promise(resolve => setTimeout(resolve, 60000));
+                clearInterval(countdownInterval);
                 
                 // Retry the request
-                showMessage('Retrying...', 'success');
-                await discoverVenues();
+                showMessage('Retrying now...', 'success');
+                document.getElementById('loadingResearch').classList.remove('hidden');
+                await researchVenue(index);
                 return;
             } else {
                 showMessage('Error: ' + data.error, 'error');
@@ -416,19 +428,31 @@ HTML_TEMPLATE = """
             signal: controller.signal
         });
 
-        clearTimeout(timeoutId);
+clearTimeout(timeoutId);
         const data = await response.json();
         
         if (data.error) {
-            // Check if it's a rate limit error
-            if (data.error.includes('RATE_LIMIT')) {
+            console.log('Error received:', data.error); // Debug log
+            
+            // Check if it's a rate limit error (check multiple variations)
+            const errorLower = data.error.toLowerCase();
+            if (errorLower.includes('rate') || errorLower.includes('limit')) {
                 showMessage('⏱️ Rate limit reached. Waiting 60 seconds and retrying...', 'error');
                 
-                // Wait 60 seconds and retry
+                // Show countdown
+                let countdown = 60;
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    showMessage(`⏱️ Rate limit reached. Retrying in ${countdown} seconds...`, 'error');
+                }, 1000);
+                
+                // Wait 60 seconds
                 await new Promise(resolve => setTimeout(resolve, 60000));
+                clearInterval(countdownInterval);
                 
                 // Retry the request
-                showMessage('Retrying...', 'success');
+                showMessage('Retrying now...', 'success');
+                document.getElementById('loadingResearch').classList.remove('hidden');
                 await researchVenue(index);
                 return;
             } else {
@@ -672,11 +696,19 @@ def discover():
         profile = data['profile']
         target_city = data['targetCity']
         
+        print(f"Discovering venues for {profile.get('name')} in {target_city}")
         venues = discover_venues_api(profile, target_city)
         
         return jsonify({'venues': venues})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        print(f"ERROR in /discover: {error_msg}")
+        
+        # Return rate limit error with special format
+        if 'RATE_LIMIT' in error_msg:
+            return jsonify({'error': 'RATE_LIMIT_ERROR'}), 429
+        else:
+            return jsonify({'error': error_msg}), 500
 
 
 @app.route('/research', methods=['POST'])
@@ -687,11 +719,19 @@ def research():
         venue = data['venue']
         profile = data['profile']
         
+        print(f"Researching venue: {venue.get('name')}")
         research_text = research_venue_api(venue, profile)
         
         return jsonify({'research': research_text})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        print(f"ERROR in /research: {error_msg}")
+        
+        # Return rate limit error with special format
+        if 'RATE_LIMIT' in error_msg:
+            return jsonify({'error': 'RATE_LIMIT_ERROR'}), 429
+        else:
+            return jsonify({'error': error_msg}), 500
 
 
 if __name__ == '__main__':
