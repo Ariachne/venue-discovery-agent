@@ -140,6 +140,77 @@ HTML_TEMPLATE = """
             font-size: 14px;
             font-weight: 600;
         }
+
+        .btn-save {
+            background: #10b981;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .btn-save:hover {
+            background: #059669;
+        }
+
+        .btn-save:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .btn-save-all {
+            background: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .btn-save-all:hover {
+            background: #059669;
+        }
+
+        .btn-save-all:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        details summary {
+            cursor: pointer;
+            color: #667eea;
+            font-weight: 600;
+            padding: 5px 0;
+        }
+
+        details summary:hover {
+            opacity: 0.8;
+        }
+
+        .settings-inner {
+            margin-top: 15px;
+        }
+
+        .saved-badge {
+            display: inline-block;
+            background: #d1fae5;
+            color: #065f46;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
         
         .loading {
             text-align: center;
@@ -249,6 +320,28 @@ HTML_TEMPLATE = """
                 🔍 Discover Venues
             </button>
         </div>
+
+        <div class="card" style="background: #f8f9ff;">
+            <details id="platformDetails">
+                <summary>Booking Platform Settings</summary>
+                <div class="settings-inner">
+                    <p style="color: #6b7280; margin-bottom: 15px; font-size: 14px;">
+                        Connect to your gig booking platform to save discovered venues directly into your outreach pipeline.
+                    </p>
+                    <div class="form-group">
+                        <label>Platform URL</label>
+                        <input type="url" id="platformUrl" placeholder="e.g., https://your-app.up.railway.app">
+                    </div>
+                    <div class="form-group">
+                        <label>Musician ID</label>
+                        <input type="text" id="musicianId" placeholder="Your musician ID from the platform">
+                    </div>
+                    <button class="btn" onclick="savePlatformSettings()" style="background: #667eea;">
+                        Save Settings
+                    </button>
+                </div>
+            </details>
+        </div>
         
         <div id="message" class="hidden"></div>
         
@@ -282,8 +375,10 @@ HTML_TEMPLATE = """
         let currentVenues = [];
         let currentResearch = '';
         let currentVenueName = '';
-        
+        let platformConfig = { url: '', musicianId: '' };
+
         window.onload = function() {
+            // Load artist profile
             const saved = localStorage.getItem('artistProfile');
             if (saved) {
                 const profile = JSON.parse(saved);
@@ -293,6 +388,14 @@ HTML_TEMPLATE = """
                 document.getElementById('feeRange').value = profile.feeRange || '';
                 document.getElementById('homeBase').value = profile.homeBase || '';
                 document.getElementById('similarArtists').value = profile.similarArtists || '';
+            }
+
+            // Load platform settings
+            const platformSaved = localStorage.getItem('platformConfig');
+            if (platformSaved) {
+                platformConfig = JSON.parse(platformSaved);
+                document.getElementById('platformUrl').value = platformConfig.url || '';
+                document.getElementById('musicianId').value = platformConfig.musicianId || '';
             }
         };
         
@@ -393,18 +496,27 @@ HTML_TEMPLATE = """
         
         function displayVenues(venues) {
             const container = document.getElementById('venuesList');
-            container.innerHTML = venues.map((venue, idx) => `
+
+            // Add "Save All" button if platform is configured
+            let saveAllBtn = '';
+            if (platformConfig.url && platformConfig.musicianId) {
+                saveAllBtn = `<button class="btn-save-all" onclick="saveAllVenuesToPlatform(event)">Save All ${venues.length} Venues to Platform</button>`;
+            }
+
+            container.innerHTML = saveAllBtn + venues.map((venue, idx) => `
                 <div class="venue-card" onclick="researchVenue(${idx})">
-                    <div class="venue-name">${venue.name}</div>
+                    <div class="venue-name">${venue.name} <span id="saved-badge-${idx}" class="saved-badge" style="display:none;">Saved</span></div>
                     <div class="venue-details">
                         📍 ${venue.city}, ${venue.state}
                         ${venue.capacity ? `• 👥 Capacity: ${venue.capacity}` : ''}
                     </div>
                     <div class="venue-details">${venue.reason}</div>
                     <span class="match-score">${venue.match_score}% Match</span>
+                    ${platformConfig.url && platformConfig.musicianId ?
+                        `<button class="btn-save" id="save-btn-${idx}" onclick="saveVenueToPlatform(event, ${idx})">Save to Platform</button>` : ''}
                 </div>
             `).join('');
-            
+
             document.getElementById('venuesSection').classList.remove('hidden');
         }
         
@@ -478,6 +590,125 @@ clearTimeout(timeoutId);
     }
 }
         
+        function savePlatformSettings() {
+            platformConfig.url = document.getElementById('platformUrl').value.replace(/\/+$/, '');
+            platformConfig.musicianId = document.getElementById('musicianId').value.trim();
+
+            if (!platformConfig.url || !platformConfig.musicianId) {
+                showMessage('Please fill in both Platform URL and Musician ID', 'error');
+                return;
+            }
+
+            localStorage.setItem('platformConfig', JSON.stringify(platformConfig));
+            showMessage('Platform settings saved! Save buttons will appear on discovered venues.', 'success');
+
+            // Re-render venues if we have any, to show save buttons
+            if (currentVenues.length > 0) {
+                displayVenues(currentVenues);
+            }
+        }
+
+        function transformVenueForPlatform(venue) {
+            const profile = saveProfile();
+            return {
+                musicianId: platformConfig.musicianId,
+                name: venue.name,
+                city: venue.city,
+                state: venue.state || '',
+                country: 'USA',
+                venueType: venue.type || 'other',
+                capacity: venue.capacity || undefined,
+                website: venue.website || undefined,
+                notes: 'Match reason: ' + (venue.reason || '')
+            };
+        }
+
+        async function saveVenueToPlatform(event, index) {
+            event.stopPropagation(); // Don't trigger research click
+
+            if (!platformConfig.url || !platformConfig.musicianId) {
+                showMessage('Please configure Platform Settings first', 'error');
+                document.getElementById('platformDetails').open = true;
+                return;
+            }
+
+            const btn = document.getElementById('save-btn-' + index);
+            if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+            const venue = currentVenues[index];
+            const transformed = transformVenueForPlatform(venue);
+
+            try {
+                const response = await fetch(platformConfig.url + '/api/venues/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Musician-Id': platformConfig.musicianId
+                    },
+                    body: JSON.stringify({ venues: [transformed] })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'Server returned ' + response.status);
+                }
+
+                const result = await response.json();
+                showMessage('Saved ' + venue.name + ' to platform!', 'success');
+
+                // Show saved badge
+                const badge = document.getElementById('saved-badge-' + index);
+                if (badge) badge.style.display = 'inline-block';
+                if (btn) { btn.textContent = 'Saved'; }
+            } catch (error) {
+                console.error('Save error:', error);
+                showMessage('Failed to save: ' + error.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Save to Platform'; }
+            }
+        }
+
+        async function saveAllVenuesToPlatform(event) {
+            event.stopPropagation();
+
+            if (!platformConfig.url || !platformConfig.musicianId) {
+                showMessage('Please configure Platform Settings first', 'error');
+                document.getElementById('platformDetails').open = true;
+                return;
+            }
+
+            const transformed = currentVenues.map(v => transformVenueForPlatform(v));
+
+            try {
+                const response = await fetch(platformConfig.url + '/api/venues/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Musician-Id': platformConfig.musicianId
+                    },
+                    body: JSON.stringify({ venues: transformed })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'Server returned ' + response.status);
+                }
+
+                const result = await response.json();
+                showMessage('Saved ' + result.created + ' venue(s) to platform!', 'success');
+
+                // Show all badges
+                currentVenues.forEach((v, i) => {
+                    const badge = document.getElementById('saved-badge-' + i);
+                    if (badge) badge.style.display = 'inline-block';
+                    const btn = document.getElementById('save-btn-' + i);
+                    if (btn) { btn.textContent = 'Saved'; btn.disabled = true; }
+                });
+            } catch (error) {
+                console.error('Save all error:', error);
+                showMessage('Failed to save venues: ' + error.message, 'error');
+            }
+        }
+
         function downloadResearch() {
             const element = document.createElement('a');
             const file = new Blob([currentResearch], {type: 'text/plain'});
