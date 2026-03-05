@@ -608,19 +608,25 @@ clearTimeout(timeoutId);
             }
         }
 
+        function normalizeUrl(url) {
+            if (!url || url.toLowerCase() === 'unknown') return undefined;
+            if (url.startsWith('http://') || url.startsWith('https://')) return url;
+            return 'https://' + url;
+        }
+
         function transformVenueForPlatform(venue) {
             const profile = saveProfile();
-            return {
+            const v = {
                 musicianId: platformConfig.musicianId,
                 name: venue.name,
                 city: venue.city,
-                state: venue.state || '',
+                state: venue.state || 'Unknown',
                 country: 'USA',
                 venueType: venue.type || 'other',
-                capacity: venue.capacity || undefined,
-                website: venue.website || undefined,
-                notes: 'Match reason: ' + (venue.reason || '')
+                website: normalizeUrl(venue.website)
             };
+            if (venue.capacity) v.capacity = venue.capacity;
+            return v;
         }
 
         async function saveVenueToPlatform(event, index) {
