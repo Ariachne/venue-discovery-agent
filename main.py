@@ -766,7 +766,7 @@ Search thoroughly for venues that book {profile['genre']} music."""
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=3000,
             tools=[{
                 "type": "web_search_20250305",
@@ -895,7 +895,7 @@ Be thorough. Use web search extensively."""
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2000,
             tools=[{
                 "type": "web_search_20250305",
