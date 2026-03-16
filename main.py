@@ -3,12 +3,106 @@ Venue Discovery Web App
 Complete web interface for musicians
 """
 
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
+from functools import wraps
+from datetime import timedelta
 import anthropic
 import os
 import re
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key')
+app.permanent_session_lifetime = timedelta(days=7)
+
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Venue Discovery Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-card h1 { color: #667eea; margin-bottom: 8px; font-size: 24px; }
+        .login-card p { color: #6b7280; margin-bottom: 24px; }
+        .login-card input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        .login-card input:focus { outline: none; border-color: #667eea; }
+        .login-card button {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .login-card button:hover { background: #5568d3; }
+        .error-msg { color: #991b1b; background: #fee2e2; padding: 10px; border-radius: 8px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>Venue Discovery Agent</h1>
+        <p>Enter password to continue</p>
+        {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+        <form method="POST" action="/login">
+            <input type="password" name="password" placeholder="Password" autofocus required>
+            <button type="submit">Log In</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        password = os.environ.get('PASSWORD')
+        if not password:
+            return f(*args, **kwargs)
+
+        # Check query parameter (for API calls)
+        if request.args.get('password') == password:
+            return f(*args, **kwargs)
+
+        # Check session cookie
+        if session.get('authenticated'):
+            return f(*args, **kwargs)
+
+        # Not authenticated
+        wants_json = request.is_json or request.content_type == 'application/json'
+        if wants_json:
+            return jsonify({'error': 'Authentication required'}), 401
+        return render_template_string(LOGIN_TEMPLATE, error=None), 401
+
+    return decorated
 
 # HTML Template - Single page application
 HTML_TEMPLATE = """
@@ -919,13 +1013,32 @@ Be thorough. Use web search extensively."""
         raise
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    password = os.environ.get('PASSWORD')
+    if not password:
+        return redirect('/')
+
+    if request.method == 'POST':
+        if request.form.get('password') == password:
+            session.permanent = True
+            session['authenticated'] = True
+            return redirect('/')
+        return render_template_string(LOGIN_TEMPLATE, error='Wrong password'), 401
+
+    return render_template_string(LOGIN_TEMPLATE, error=None)
+
+
 @app.route('/')
+@require_auth
 def index():
     """Main page"""
     return render_template_string(HTML_TEMPLATE)
 
 
 @app.route('/discover', methods=['POST'])
+@require_auth
 def discover():
     """Discover venues endpoint"""
     try:
@@ -949,6 +1062,7 @@ def discover():
 
 
 @app.route('/research', methods=['POST'])
+@require_auth
 def research():
     """Research venue endpoint"""
     try:
