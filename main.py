@@ -14,6 +14,18 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key')
 app.permanent_session_lifetime = timedelta(days=7)
 
+
+@app.route('/healthz')
+def healthz():
+    """Unauthenticated liveness probe for uptime monitoring.
+
+    Intentionally does NOT call Anthropic or the database — it only
+    confirms the web process is up and serving. Must stay above the
+    authenticated routes so monitors can hit it without credentials.
+    """
+    return jsonify({"status": "ok", "service": "venue-discovery-agent"}), 200
+
+
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
